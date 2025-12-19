@@ -66,6 +66,7 @@ const Utils = {
      * @returns {string}
      */
     formatNumber(num) {
+        if (num === undefined || num === null || isNaN(num)) return '0';
         return num.toLocaleString('fr-FR');
     },
 

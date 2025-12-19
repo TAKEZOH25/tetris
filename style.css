@@ -687,11 +687,87 @@ body::before {
     display: none;
 }
 
-/* Global Stats Module */
-.stats-container {
-    margin-top: 15px;
+.menu-screen.hidden {
+    display: none;
+}
+
+.menu-screen {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.mode-selection {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
     width: 100%;
     max-width: 250px;
+    margin: 20px 0;
+}
+
+.mode-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(0, 245, 255, 0.2);
+    border-radius: 12px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: white;
+}
+
+.mode-btn:hover {
+    background: rgba(0, 245, 255, 0.1);
+    border-color: #00f5ff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 245, 255, 0.2);
+}
+
+.mode-btn.primary {
+    background: linear-gradient(135deg, rgba(123, 47, 255, 0.3), rgba(0, 245, 255, 0.3));
+    border-color: rgba(0, 245, 255, 0.5);
+    margin: 15px 0;
+    font-family: 'Orbitron', sans-serif;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.mode-name {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: bold;
+    font-size: 0.9rem;
+    letter-spacing: 1px;
+}
+
+.mode-desc {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 4px;
+}
+
+/* Global Stats Module */
+.persistence-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.persistence-display.hidden {
+    display: none;
+}
+
+.stats-container {
+    margin-top: 5px;
+    width: 100%;
+    max-width: 260px;
     font-family: 'Rajdhani', sans-serif;
     background: rgba(123, 47, 255, 0.1);
     padding: 10px;

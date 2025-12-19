@@ -31,10 +31,29 @@ const StorageSystem = {
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                this.data = { ...this.data, ...parsed };
-                // S'assurer que les sous-objets sont aussi fusionnés proprement
-                this.data.stats = { ...this.data.stats, ...(parsed.stats || {}) };
-                this.data.settings = { ...this.data.settings, ...(parsed.settings || {}) };
+
+                // Fusionner les scores et le dernier jeu
+                if (Array.isArray(parsed.highScores)) {
+                    this.data.highScores = parsed.highScores;
+                }
+                this.data.lastGame = parsed.lastGame || null;
+
+                // Fusionner les stats en gardant les défauts pour les nouveaux champs
+                if (parsed.stats) {
+                    this.data.stats = { ...this.data.stats, ...parsed.stats };
+                }
+
+                // Fusionner les settings
+                if (parsed.settings) {
+                    this.data.settings = { ...this.data.settings, ...parsed.settings };
+                }
+
+                // Nettoyage de sécurité : si une stat est NaN, on la remet à 0
+                Object.keys(this.data.stats).forEach(key => {
+                    if (isNaN(this.data.stats[key])) {
+                        this.data.stats[key] = 0;
+                    }
+                });
             } catch (e) {
                 console.error("Erreur de lecture du stockage:", e);
             }

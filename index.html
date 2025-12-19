@@ -38,36 +38,82 @@
                     <h3>NIVEAU</h3>
                     <div class="value" id="level">1</div>
                 </div>
+                <div class="info-box goal-box hidden" id="goalBox">
+                    <h3 id="goalTitle">OBJECTIF</h3>
+                    <div class="value" id="goalValue">0</div>
+                </div>
             </div>
 
             <div class="game-board-wrapper">
                 <canvas id="gameBoard" width="300" height="600"></canvas>
                 <div class="game-overlay" id="gameOverlay">
                     <div class="overlay-content">
-                        <h2 id="overlayTitle">TETRIS</h2>
-                        <p id="overlayMessage">Appuyez sur ESPACE pour jouer</p>
-                        <div class="final-score" id="finalScore"></div>
-                        <button id="resumeBtn" class="resume-button hidden">Reprendre la partie</button>
+                        <div id="mainMenu" class="menu-screen">
+                            <h2 id="overlayTitle">TETRIS</h2>
+                            <p id="overlayMessage">Choisissez votre défi</p>
 
-                        <div class="high-scores-container" id="highScoresContainer">
-                            <h3>TOP 10 RECORDS</h3>
-                            <div id="highScoresList"></div>
+                            <div class="mode-selection">
+                                <button class="mode-btn" onclick="GameSystem.start('MARATHON')">
+                                    <span class="mode-name">MARATHON</span>
+                                    <span class="mode-desc">Classique (Niv 1-15)</span>
+                                </button>
+                                <button class="mode-btn" onclick="GameSystem.start('SPRINT')">
+                                    <span class="mode-name">SPRINT</span>
+                                    <span class="mode-desc">40 Lignes Rapides</span>
+                                </button>
+                                <button class="mode-btn" onclick="GameSystem.start('ULTRA')">
+                                    <span class="mode-name">ULTRA</span>
+                                    <span class="mode-desc">Max Score 2 Mins</span>
+                                </button>
+                                <button class="mode-btn" onclick="GameSystem.start('ZEN')">
+                                    <span class="mode-name">ZEN</span>
+                                    <span class="mode-desc">Sans Limites</span>
+                                </button>
+                            </div>
+
+                            <button id="resumeBtn" class="resume-button hidden">REPRENDRE LA PARTIE</button>
                         </div>
 
-                        <div class="stats-container" id="statsContainer">
-                            <h3>STATISTIQUES GLOBALES</h3>
-                            <div class="stats-grid">
-                                <div class="stat-item">
-                                    <span class="label">Parties :</span>
-                                    <span id="statGames">0</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="label">Lignes :</span>
-                                    <span id="statLines">0</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="label">Record :</span>
-                                    <span id="statBest">0</span>
+                        <div id="pauseScreen" class="menu-screen hidden">
+                            <h2>PAUSE</h2>
+                            <p>Partie en cours...</p>
+                            <div class="mode-selection">
+                                <button class="mode-btn primary" onclick="GameSystem.togglePause()">
+                                    <span class="mode-name">CONTINUER</span>
+                                </button>
+                                <button class="mode-btn" onclick="GameSystem.showMenu()">
+                                    <span class="mode-name">ABANDONNER</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="gameOverScreen" class="menu-screen hidden">
+                            <h2 id="gameOverTitle">GAME OVER</h2>
+                            <div class="final-score" id="finalScore"></div>
+                            <button class="mode-btn primary" onclick="GameSystem.showMenu()">RETOUR AU MENU</button>
+                        </div>
+
+                        <div id="persistenceDisplay" class="persistence-display">
+                            <div class="high-scores-container" id="highScoresContainer">
+                                <h3>TOP 10 RECORDS</h3>
+                                <div id="highScoresList"></div>
+                            </div>
+
+                            <div class="stats-container" id="statsContainer">
+                                <h3>STATISTIQUES GLOBALES</h3>
+                                <div class="stats-grid">
+                                    <div class="stat-item">
+                                        <span class="label">Parties :</span>
+                                        <span id="statGames">0</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="label">Lignes :</span>
+                                        <span id="statLines">0</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="label">Record :</span>
+                                        <span id="statBest">0</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>

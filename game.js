@@ -43,6 +43,9 @@ const GameState = {
     animationId: null,
     startTime: 0,
     totalSessionTime: 0, // Temps accumulé dans la session actuelle
+    gameMode: 'MARATHON', // MARATHON, SPRINT, ULTRA, ZEN
+    modeTarget: 0,       // Lignes cibles (Sprint) ou Temps cible (Ultra)
+    gameTimer: 0,        // Timer pour Sprint/Ultra
 
     // Lock Delay (Couche 2)
     lockDelayTimeout: null,
@@ -100,9 +103,15 @@ const DOM = {
         this.overlay = document.getElementById('gameOverlay');
         this.overlayTitle = document.getElementById('overlayTitle');
         this.overlayMessage = document.getElementById('overlayMessage');
-        this.finalScore = document.getElementById('finalScore');
         this.holdBox = document.querySelector('.hold-box');
         this.resumeBtn = document.getElementById('resumeBtn');
+        this.mainMenu = document.getElementById('mainMenu');
+        this.pauseScreen = document.getElementById('pauseScreen');
+        this.gameOverScreen = document.getElementById('gameOverScreen');
+        this.goalBox = document.getElementById('goalBox');
+        this.goalTitle = document.getElementById('goalTitle');
+        this.goalValue = document.getElementById('goalValue');
+        this.persistenceDisplay = document.getElementById('persistenceDisplay');
     }
 };
 
@@ -604,14 +613,23 @@ const GameSystem = {
         }
 
         this.setupEventListeners();
+        this.showMenu();
+    },
 
-        // État initial
-        GameState.reset();
+    showMenu() {
+        GameState.isRunning = false;
+        GameState.isPaused = false;
+        cancelAnimationFrame(GameState.animationId);
+
+        DOM.overlay.classList.remove('hidden');
+        DOM.mainMenu.classList.remove('hidden');
+        DOM.pauseScreen.classList.add('hidden');
+        DOM.gameOverScreen.classList.add('hidden');
+        if (DOM.persistenceDisplay) DOM.persistenceDisplay.classList.remove('hidden');
+
         RenderSystem.drawBoard();
-        RenderSystem.drawNextPieces();
-        RenderSystem.drawHoldPiece();
-
-        console.log('🎮 Tetris v2.0 - Couche 2 (DAS/ARR, Soft Drop, SRS)');
+        RenderSystem.drawHighScores();
+        RenderSystem.drawStats();
     },
 
     setupEventListeners() {
@@ -631,11 +649,21 @@ const GameSystem = {
         });
     },
 
-    start() {
+    start(mode = 'MARATHON') {
         GameState.reset();
-        StorageSystem.clearLastGame(); // Nouvelle partie, on efface la reprise possible
+        GameState.gameMode = mode;
+        StorageSystem.clearLastGame();
+
         if (DOM.resumeBtn) DOM.resumeBtn.classList.add('hidden');
-        InputSystem.reset();  // Reset DAS/ARR state
+        DOM.mainMenu.classList.add('hidden');
+        DOM.pauseScreen.classList.add('hidden');
+        DOM.gameOverScreen.classList.add('hidden');
+        if (DOM.persistenceDisplay) DOM.persistenceDisplay.classList.add('hidden');
+
+        // Configuration spécifique au mode
+        this.setupMode(mode);
+
+        InputSystem.reset();
         GameState.isRunning = true;
         GameState.isPaused = false;
 
@@ -651,10 +679,36 @@ const GameSystem = {
 
         DOM.overlay.classList.add('hidden');
 
-        GameEvents.emit(EVENTS.GAME_START);
+        GameEvents.emit(EVENTS.GAME_START, { mode });
         GameState.startTime = performance.now();
         GameState.lastDropTime = performance.now();
         this.gameLoop();
+    },
+
+    setupMode(mode) {
+        DOM.goalBox.classList.add('hidden');
+
+        switch (mode) {
+            case 'SPRINT':
+                GameState.modeTarget = 40;
+                DOM.goalTitle.textContent = 'RESTANT';
+                DOM.goalValue.textContent = '40';
+                DOM.goalBox.classList.remove('hidden');
+                break;
+            case 'ULTRA':
+                GameState.modeTarget = 120; // 2 minutes
+                GameState.gameTimer = 120;
+                DOM.goalTitle.textContent = 'TEMPS';
+                DOM.goalValue.textContent = '2:00';
+                DOM.goalBox.classList.remove('hidden');
+                break;
+            case 'MARATHON':
+                GameState.modeTarget = 15; // Niveau max
+                break;
+            case 'ZEN':
+                GameState.modeTarget = Infinity;
+                break;
+        }
     },
 
     resume() {
@@ -678,6 +732,10 @@ const GameSystem = {
         if (lastGame.pieceBag) {
             GameState.pieceBag = lastGame.pieceBag;
         }
+
+        GameState.gameMode = lastGame.gameMode || 'MARATHON';
+        GameState.gameTimer = lastGame.gameTimer || 0;
+        this.setupMode(GameState.gameMode);
 
         GameState.isRunning = true;
         GameState.isPaused = false;
@@ -704,8 +762,15 @@ const GameSystem = {
         GameState.isLocking = false;
 
         if (CollisionSystem.check(GameState.currentPiece.shape, GameState.currentPiece.x, GameState.currentPiece.y)) {
-            this.gameOver();
-            return;
+            if (GameState.gameMode === 'ZEN') {
+                // En mode ZEN, on vide le plateau au lieu de game over
+                GameState.board = GameState.board.map(row => row.fill(0));
+                this.updateUI();
+                RenderSystem.drawBoard();
+            } else {
+                this.gameOver();
+                return;
+            }
         }
 
         RenderSystem.drawNextPieces();
@@ -842,8 +907,14 @@ const GameSystem = {
 
         // Vérifier game over
         if (CollisionSystem.check(GameState.currentPiece.shape, GameState.currentPiece.x, GameState.currentPiece.y)) {
-            this.gameOver();
-            return;
+            if (GameState.gameMode === 'ZEN') {
+                GameState.board = GameState.board.map(row => row.fill(0));
+                this.updateUI();
+                RenderSystem.drawBoard();
+            } else {
+                this.gameOver();
+                return;
+            }
         }
 
         RenderSystem.drawHoldPiece();
@@ -870,8 +941,15 @@ const GameSystem = {
                     const x = piece.x + col;
 
                     if (y < 0) {
-                        this.gameOver();
-                        return;
+                        if (GameState.gameMode === 'ZEN') {
+                            GameState.board = GameState.board.map(row => row.fill(0));
+                            this.updateUI();
+                            RenderSystem.drawBoard();
+                            return;
+                        } else {
+                            this.gameOver();
+                            return;
+                        }
                     }
 
                     GameState.board[y][x] = piece.shape[row][col];
@@ -904,7 +982,9 @@ const GameSystem = {
             lines: GameState.lines,
             heldPiece: GameState.heldPiece ? GameState.heldPiece.type : null,
             nextPieces: GameState.nextPieces.map(p => p.type),
-            pieceBag: GameState.pieceBag
+            pieceBag: GameState.pieceBag,
+            gameMode: GameState.gameMode,
+            gameTimer: GameState.gameTimer
         });
 
         this.clearLines();
@@ -948,6 +1028,19 @@ const GameSystem = {
             });
 
             this.updateUI();
+
+            // Vérifier conditions de victoire spécifiques aux modes
+            if (GameState.gameMode === 'SPRINT') {
+                const remaining = Math.max(0, GameState.modeTarget - GameState.lines);
+                DOM.goalValue.textContent = remaining;
+                if (GameState.lines >= GameState.modeTarget) {
+                    this.victory('SPRINT FINI !');
+                }
+            } else if (GameState.gameMode === 'MARATHON') {
+                if (GameState.level >= GameState.modeTarget) {
+                    this.victory('MARATHON COMPLÉTÉ !');
+                }
+            }
         } else {
             ScoreSystem.handleCombo(0);
         }
@@ -958,13 +1051,18 @@ const GameSystem = {
 
         if (GameState.isPaused) {
             GameState.totalSessionTime += (performance.now() - GameState.startTime) / 1000;
-            DOM.overlayTitle.textContent = 'PAUSE';
-            DOM.overlayMessage.textContent = 'Appuyez sur P pour continuer';
-            DOM.finalScore.textContent = '';
+
+            DOM.mainMenu.classList.add('hidden');
+            DOM.gameOverScreen.classList.add('hidden');
+            DOM.pauseScreen.classList.remove('hidden');
             DOM.overlay.classList.remove('hidden');
+            if (DOM.persistenceDisplay) DOM.persistenceDisplay.classList.add('hidden');
+
             GameEvents.emit(EVENTS.GAME_PAUSE);
         } else {
             DOM.overlay.classList.add('hidden');
+            DOM.pauseScreen.classList.add('hidden');
+            if (DOM.persistenceDisplay) DOM.persistenceDisplay.classList.add('hidden');
             GameState.startTime = performance.now();
             GameState.lastDropTime = performance.now();
             GameEvents.emit(EVENTS.GAME_RESUME);
@@ -972,14 +1070,20 @@ const GameSystem = {
         }
     },
 
-    gameOver() {
+    gameOver(customTitle = 'GAME OVER') {
         GameState.isRunning = false;
         cancelAnimationFrame(GameState.animationId);
 
-        DOM.overlayTitle.textContent = 'GAME OVER';
-        DOM.overlayMessage.textContent = 'Appuyez sur ESPACE pour rejouer';
-        DOM.finalScore.textContent = `Score: ${Utils.formatNumber(GameState.score)}`;
+        DOM.mainMenu.classList.add('hidden');
+        DOM.pauseScreen.classList.add('hidden');
+        DOM.gameOverScreen.classList.remove('hidden');
+        if (DOM.persistenceDisplay) DOM.persistenceDisplay.classList.remove('hidden');
         DOM.overlay.classList.remove('hidden');
+
+        const overTitle = document.getElementById('gameOverTitle');
+        if (overTitle) overTitle.textContent = customTitle;
+
+        DOM.finalScore.textContent = `Score: ${Utils.formatNumber(GameState.score)}`;
 
         // Calculer le temps final
         const sessionSeconds = (performance.now() - GameState.startTime) / 1000;
@@ -987,9 +1091,9 @@ const GameSystem = {
 
         // PERSISTANCE (Layer 5)
         // Enregistrer le score et les stats
-        const isHigher = StorageSystem.addScore(GameState.score, GameState.lines, GameState.level);
+        StorageSystem.addScore(GameState.score, GameState.lines, GameState.level);
         StorageSystem.updateStats(GameState.lines, Math.floor(GameState.totalSessionTime));
-        StorageSystem.clearLastGame(); // Partie finie, on oublie l'état de reprise
+        StorageSystem.clearLastGame();
 
         // Afficher le leaderboard et les stats à jour
         RenderSystem.drawHighScores(GameState.score);
@@ -1006,6 +1110,10 @@ const GameSystem = {
         DOM.lines.textContent = GameState.lines;
         DOM.level.textContent = GameState.level;
 
+        if (GameState.gameMode === 'SPRINT') {
+            DOM.goalValue.textContent = Math.max(0, GameState.modeTarget - GameState.lines);
+        }
+
         GameEvents.emit(EVENTS.UI_UPDATE, {
             score: GameState.score,
             lines: GameState.lines,
@@ -1019,6 +1127,9 @@ const GameSystem = {
         // Mise à jour du système d'input (DAS/ARR + Soft Drop)
         InputSystem.update(timestamp);
 
+        // Mise à jour du Timer (Ultra/Sprint)
+        this.updateTimer(timestamp);
+
         const deltaTime = timestamp - GameState.lastDropTime;
 
         if (deltaTime > GameState.dropInterval) {
@@ -1028,7 +1139,37 @@ const GameSystem = {
 
         RenderSystem.drawBoard();
         GameState.animationId = requestAnimationFrame((t) => this.gameLoop(t));
-    }
+    },
+
+    updateTimer(timestamp) {
+        if (GameState.gameMode === 'ULTRA') {
+            const elapsed = (timestamp - GameState.startTime) / 1000;
+            GameState.gameTimer = Math.max(0, GameState.modeTarget - elapsed);
+
+            const minutes = Math.floor(GameState.gameTimer / 60);
+            const seconds = Math.floor(GameState.gameTimer % 60);
+            DOM.goalValue.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+            if (GameState.gameTimer <= 0) {
+                this.victory('TEMPS ÉCOULÉ !');
+            }
+        } else if (GameState.gameMode === 'SPRINT') {
+            const elapsed = (timestamp - GameState.startTime) / 1000;
+            GameState.gameTimer = elapsed;
+
+            const minutes = Math.floor(GameState.gameTimer / 60);
+            const seconds = Math.floor(GameState.gameTimer % 60);
+            const ms = Math.floor((GameState.gameTimer % 1) * 100);
+            // On ne met pas à jour le DOM toutes les frames pour la lisibilité
+        }
+    },
+
+    victory(message = 'VICTOIRE !') {
+        GameState.isRunning = false;
+        cancelAnimationFrame(GameState.animationId);
+
+        this.gameOver(message);
+    },
 };
 
 // ===================
@@ -1174,7 +1315,8 @@ const InputSystem = {
         if (code === 'Space') {
             e.preventDefault();
             if (!GameState.isRunning) {
-                GameSystem.start();
+                // Si on a déjà une partie enregistrée (ou qu'on vient de finit), on relance le même mode
+                GameSystem.start(GameState.gameMode || 'MARATHON');
             } else if (!GameState.isPaused && GameState.currentPiece) {
                 GameSystem.hardDrop();
             }
