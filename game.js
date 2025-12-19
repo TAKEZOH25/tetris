@@ -1,6 +1,6 @@
 /**
  * TETRIS - Logique du jeu principale
- * Utilise les fondations : CONFIG, GameEvents, Utils
+ * Couche 1: Hard Drop, Hold, Preview 3 pièces, 7-Bag
  */
 
 // ===================
@@ -12,17 +12,19 @@ const GameState = {
     ctx: null,
     nextCanvas: null,
     nextCtx: null,
+    holdCanvas: null,
+    holdCtx: null,
 
     // Plateau de jeu
     board: [],
 
     // Pièces
     currentPiece: null,
-    nextPiece: null,
+    nextPieces: [],      // Array de 3 pièces suivantes
     heldPiece: null,
     canHold: true,
 
-    // Bag pour le randomizer 7-bag (préparé pour Couche 1)
+    // Bag pour le randomizer 7-bag
     pieceBag: [],
 
     // Score et progression
@@ -47,7 +49,7 @@ const GameState = {
             this.board[row] = new Array(CONFIG.BOARD.COLS).fill(0);
         }
         this.currentPiece = null;
-        this.nextPiece = null;
+        this.nextPieces = [];
         this.heldPiece = null;
         this.canHold = true;
         this.pieceBag = [];
@@ -71,6 +73,7 @@ const DOM = {
     overlayTitle: null,
     overlayMessage: null,
     finalScore: null,
+    holdBox: null,
 
     init() {
         this.score = document.getElementById('score');
@@ -80,6 +83,7 @@ const DOM = {
         this.overlayTitle = document.getElementById('overlayTitle');
         this.overlayMessage = document.getElementById('overlayMessage');
         this.finalScore = document.getElementById('finalScore');
+        this.holdBox = document.querySelector('.hold-box');
     }
 };
 
@@ -91,7 +95,6 @@ const PieceSystem = {
      * Créer une pièce à partir d'un type
      */
     create(type = null) {
-        // Si pas de type spécifié, utiliser le bag randomizer
         if (!type) {
             type = this.getNextFromBag();
         }
@@ -110,14 +113,32 @@ const PieceSystem = {
     },
 
     /**
-     * 7-Bag Randomizer
-     * Garantit une distribution équitable des pièces
+     * 7-Bag Randomizer - Distribution équitable des pièces
      */
     getNextFromBag() {
         if (GameState.pieceBag.length === 0) {
             GameState.pieceBag = Utils.shuffle([...CONFIG.PIECE_TYPES]);
         }
         return GameState.pieceBag.pop();
+    },
+
+    /**
+     * Remplir la file des pièces suivantes
+     */
+    fillNextPieces() {
+        while (GameState.nextPieces.length < CONFIG.PREVIEW.COUNT) {
+            GameState.nextPieces.push(this.create());
+        }
+    },
+
+    /**
+     * Obtenir la prochaine pièce de la file
+     */
+    getNextPiece() {
+        this.fillNextPieces();
+        const piece = GameState.nextPieces.shift();
+        this.fillNextPieces();
+        return piece;
     },
 
     /**
@@ -162,12 +183,10 @@ const CollisionSystem = {
                     const newX = x + col;
                     const newY = y + row;
 
-                    // Hors limites
                     if (newX < 0 || newX >= CONFIG.BOARD.COLS || newY >= CONFIG.BOARD.ROWS) {
                         return true;
                     }
 
-                    // Collision avec bloc existant
                     if (newY >= 0 && GameState.board[newY][newX]) {
                         return true;
                     }
@@ -200,7 +219,6 @@ const RenderSystem = {
         const padding = 1;
         const innerSize = size - padding * 2;
 
-        // Bloc principal avec dégradé
         const gradient = ctx.createLinearGradient(
             x * size, y * size,
             x * size + size, y * size + size
@@ -211,18 +229,40 @@ const RenderSystem = {
         ctx.fillStyle = gradient;
         ctx.fillRect(x * size + padding, y * size + padding, innerSize, innerSize);
 
-        // Effet de brillance
         ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
         ctx.fillRect(x * size + padding, y * size + padding, innerSize, innerSize / 4);
 
-        // Bordure intérieure
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.lineWidth = 1;
         ctx.strokeRect(x * size + padding + 1, y * size + padding + 1, innerSize - 2, innerSize - 2);
 
-        // Ombre
         ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
         ctx.fillRect(x * size + padding, y * size + size - padding - 3, innerSize, 3);
+    },
+
+    /**
+     * Dessiner une pièce (générique, pour les previews)
+     */
+    drawPiecePreview(ctx, piece, offsetX, offsetY, size) {
+        const shape = piece.shape;
+        for (let row = 0; row < shape.length; row++) {
+            for (let col = 0; col < shape[row].length; col++) {
+                if (shape[row][col]) {
+                    const x = offsetX + col * size;
+                    const y = offsetY + row * size;
+
+                    const gradient = ctx.createLinearGradient(x, y, x + size, y + size);
+                    gradient.addColorStop(0, CONFIG.COLOR_MAP[shape[row][col]]);
+                    gradient.addColorStop(1, Utils.shadeColor(CONFIG.COLOR_MAP[shape[row][col]], -30));
+
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(x + 1, y + 1, size - 2, size - 2);
+
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.fillRect(x + 1, y + 1, size - 2, (size - 2) / 4);
+                }
+            }
+        }
     },
 
     /**
@@ -232,11 +272,9 @@ const RenderSystem = {
         const { ctx, canvas } = GameState;
         const { COLS, ROWS, BLOCK_SIZE } = CONFIG.BOARD;
 
-        // Fond
         ctx.fillStyle = CONFIG.COLORS.BACKGROUND;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Grille
         if (CONFIG.VISUALS.GRID_ENABLED) {
             ctx.strokeStyle = CONFIG.COLORS.GRID;
             ctx.lineWidth = 1;
@@ -255,7 +293,6 @@ const RenderSystem = {
             }
         }
 
-        // Blocs fixés
         for (let row = 0; row < ROWS; row++) {
             for (let col = 0; col < COLS; col++) {
                 if (GameState.board[row][col]) {
@@ -264,14 +301,12 @@ const RenderSystem = {
             }
         }
 
-        // Pièce fantôme
         if (GameState.currentPiece && CONFIG.VISUALS.GHOST_OPACITY > 0) {
             this.drawGhostPiece();
         }
 
-        // Pièce courante
         if (GameState.currentPiece) {
-            this.drawPiece(ctx, GameState.currentPiece);
+            this.drawCurrentPiece();
         }
     },
 
@@ -301,17 +336,18 @@ const RenderSystem = {
     },
 
     /**
-     * Dessiner une pièce
+     * Dessiner la pièce courante
      */
-    drawPiece(ctx, piece) {
-        for (let row = 0; row < piece.shape.length; row++) {
-            for (let col = 0; col < piece.shape[row].length; col++) {
-                if (piece.shape[row][col]) {
+    drawCurrentPiece() {
+        const { ctx, currentPiece } = GameState;
+        for (let row = 0; row < currentPiece.shape.length; row++) {
+            for (let col = 0; col < currentPiece.shape[row].length; col++) {
+                if (currentPiece.shape[row][col]) {
                     this.drawBlock(
                         ctx,
-                        piece.x + col,
-                        piece.y + row,
-                        CONFIG.COLOR_MAP[piece.shape[row][col]]
+                        currentPiece.x + col,
+                        currentPiece.y + row,
+                        CONFIG.COLOR_MAP[currentPiece.shape[row][col]]
                     );
                 }
             }
@@ -319,38 +355,63 @@ const RenderSystem = {
     },
 
     /**
-     * Dessiner la prochaine pièce
+     * Dessiner les 3 prochaines pièces
      */
-    drawNextPiece() {
-        const { nextCtx, nextCanvas, nextPiece } = GameState;
+    drawNextPieces() {
+        const { nextCtx, nextCanvas, nextPieces } = GameState;
+        const size = 20;
+        const spacing = 90;
 
         nextCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
         nextCtx.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
 
-        if (nextPiece) {
-            const size = 25;
-            const shape = nextPiece.shape;
-            const offsetX = (nextCanvas.width - shape[0].length * size) / 2;
-            const offsetY = (nextCanvas.height - shape.length * size) / 2;
+        nextPieces.forEach((piece, index) => {
+            if (!piece) return;
 
-            for (let row = 0; row < shape.length; row++) {
-                for (let col = 0; col < shape[row].length; col++) {
-                    if (shape[row][col]) {
-                        const x = offsetX + col * size;
-                        const y = offsetY + row * size;
+            const shape = piece.shape;
+            const pieceWidth = shape[0].length * size;
+            const pieceHeight = shape.length * size;
+            const offsetX = (nextCanvas.width - pieceWidth) / 2;
+            const offsetY = 10 + index * spacing + (spacing - pieceHeight) / 2;
 
-                        const gradient = nextCtx.createLinearGradient(x, y, x + size, y + size);
-                        gradient.addColorStop(0, CONFIG.COLOR_MAP[shape[row][col]]);
-                        gradient.addColorStop(1, Utils.shadeColor(CONFIG.COLOR_MAP[shape[row][col]], -30));
+            this.drawPiecePreview(nextCtx, piece, offsetX, offsetY, size);
+        });
+    },
 
-                        nextCtx.fillStyle = gradient;
-                        nextCtx.fillRect(x + 1, y + 1, size - 2, size - 2);
+    /**
+     * Dessiner la pièce en hold
+     */
+    drawHoldPiece() {
+        const { holdCtx, holdCanvas, heldPiece, canHold } = GameState;
+        const size = 20;
 
-                        nextCtx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                        nextCtx.fillRect(x + 1, y + 1, size - 2, (size - 2) / 4);
-                    }
-                }
+        holdCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        holdCtx.fillRect(0, 0, holdCanvas.width, holdCanvas.height);
+
+        // Afficher l'état disabled
+        if (DOM.holdBox) {
+            if (!canHold) {
+                DOM.holdBox.classList.add('disabled');
+            } else {
+                DOM.holdBox.classList.remove('disabled');
             }
+        }
+
+        if (heldPiece) {
+            const shape = heldPiece.shape;
+            const pieceWidth = shape[0].length * size;
+            const pieceHeight = shape.length * size;
+            const offsetX = (holdCanvas.width - pieceWidth) / 2;
+            const offsetY = (holdCanvas.height - pieceHeight) / 2;
+
+            // Rendre grisé si on ne peut pas hold
+            if (!canHold) {
+                holdCtx.globalAlpha = 0.5;
+            }
+
+            this.drawPiecePreview(holdCtx, heldPiece, offsetX, offsetY, size);
+
+            holdCtx.globalAlpha = 1;
         }
     }
 };
@@ -359,25 +420,16 @@ const RenderSystem = {
 // SYSTÈME DE SCORE
 // ===================
 const ScoreSystem = {
-    /**
-     * Ajouter des points
-     */
     add(points) {
         GameState.score += points;
         GameEvents.emit(EVENTS.SCORE_UPDATE, { score: GameState.score });
     },
 
-    /**
-     * Calculer les points pour les lignes
-     */
     calculateLineScore(linesCleared) {
         const basePoints = CONFIG.SCORING.LINES[linesCleared] || 0;
         return basePoints * GameState.level;
     },
 
-    /**
-     * Gérer le combo
-     */
     handleCombo(linesCleared) {
         if (linesCleared > 0) {
             GameState.combo++;
@@ -396,15 +448,18 @@ const ScoreSystem = {
 // SYSTÈME DE JEU
 // ===================
 const GameSystem = {
-    /**
-     * Initialiser le jeu
-     */
     init() {
-        // Canvas
+        // Canvas principal
         GameState.canvas = document.getElementById('gameBoard');
         GameState.ctx = GameState.canvas.getContext('2d');
+
+        // Canvas des pièces suivantes
         GameState.nextCanvas = document.getElementById('nextPiece');
         GameState.nextCtx = GameState.nextCanvas.getContext('2d');
+
+        // Canvas du hold
+        GameState.holdCanvas = document.getElementById('holdPiece');
+        GameState.holdCtx = GameState.holdCanvas.getContext('2d');
 
         // DOM
         DOM.init();
@@ -413,35 +468,34 @@ const GameSystem = {
         document.addEventListener('keydown', InputSystem.handleKeyDown);
         document.addEventListener('keyup', InputSystem.handleKeyUp);
 
-        // Écouter les événements du jeu
         this.setupEventListeners();
 
         // État initial
         GameState.reset();
         RenderSystem.drawBoard();
-        RenderSystem.drawNextPiece();
+        RenderSystem.drawNextPieces();
+        RenderSystem.drawHoldPiece();
 
-        console.log('🎮 Tetris initialisé avec les fondations v1.0');
+        console.log('🎮 Tetris v1.1 - Couche 1 (Hard Drop, Hold, Preview 3)');
     },
 
-    /**
-     * Configurer les écouteurs d'événements
-     */
     setupEventListeners() {
         GameEvents.on(EVENTS.LINES_CLEAR, (data) => {
             if (data.count === 4) {
                 GameEvents.emit(EVENTS.TETRIS);
+                console.log('🎯 TETRIS!');
             }
         });
 
         GameEvents.on(EVENTS.LEVEL_UP, (data) => {
             console.log(`📈 Niveau ${data.level}!`);
         });
+
+        GameEvents.on(EVENTS.PIECE_HARD_DROP, (data) => {
+            console.log(`⬇️ Hard Drop: +${data.points} points`);
+        });
     },
 
-    /**
-     * Démarrer une partie
-     */
     start() {
         GameState.reset();
         GameState.isRunning = true;
@@ -449,41 +503,38 @@ const GameSystem = {
 
         this.updateUI();
 
-        // Créer les premières pièces
-        GameState.nextPiece = PieceSystem.create();
+        // Remplir les pièces suivantes
+        PieceSystem.fillNextPieces();
         this.spawnPiece();
 
-        // Cacher l'overlay
+        // Dessiner les previews
+        RenderSystem.drawNextPieces();
+        RenderSystem.drawHoldPiece();
+
         DOM.overlay.classList.add('hidden');
 
-        // Émettre l'événement
         GameEvents.emit(EVENTS.GAME_START);
 
-        // Lancer la boucle
         GameState.lastDropTime = performance.now();
         this.gameLoop();
     },
 
-    /**
-     * Faire apparaître une nouvelle pièce
-     */
     spawnPiece() {
-        GameState.currentPiece = GameState.nextPiece;
-        GameState.nextPiece = PieceSystem.create();
+        GameState.currentPiece = PieceSystem.getNextPiece();
         GameState.canHold = true;
 
-        // Vérifier game over
         if (CollisionSystem.check(GameState.currentPiece.shape, GameState.currentPiece.x, GameState.currentPiece.y)) {
             this.gameOver();
             return;
         }
 
-        RenderSystem.drawNextPiece();
+        RenderSystem.drawNextPieces();
+        RenderSystem.drawHoldPiece();
         GameEvents.emit(EVENTS.PIECE_SPAWN, { piece: GameState.currentPiece });
     },
 
     /**
-     * Descendre la pièce d'une case
+     * Soft Drop - descendre d'une case
      */
     dropPiece() {
         if (!CollisionSystem.check(GameState.currentPiece.shape, GameState.currentPiece.x, GameState.currentPiece.y + 1)) {
@@ -496,8 +547,68 @@ const GameSystem = {
     },
 
     /**
-     * Verrouiller la pièce sur le plateau
+     * Hard Drop - descendre instantanément
      */
+    hardDrop() {
+        const piece = GameState.currentPiece;
+        const startY = piece.y;
+        const ghostY = CollisionSystem.getGhostY(piece);
+
+        // Calculer les points (2 points par cellule)
+        const cellsDropped = ghostY - startY;
+        const points = cellsDropped * CONFIG.SCORING.HARD_DROP;
+
+        // Déplacer la pièce
+        piece.y = ghostY;
+
+        // Ajouter les points
+        ScoreSystem.add(points);
+
+        GameEvents.emit(EVENTS.PIECE_HARD_DROP, {
+            cells: cellsDropped,
+            points: points
+        });
+
+        // Verrouiller immédiatement
+        this.lockPiece();
+
+        this.updateUI();
+    },
+
+    /**
+     * Hold - mettre une pièce en réserve
+     */
+    holdPiece() {
+        if (!GameState.canHold) return;
+
+        const currentType = GameState.currentPiece.type;
+
+        if (GameState.heldPiece) {
+            // Échanger avec la pièce en hold
+            const heldType = GameState.heldPiece.type;
+            GameState.heldPiece = PieceSystem.create(currentType);
+            GameState.currentPiece = PieceSystem.create(heldType);
+        } else {
+            // Mettre en hold et prendre la pièce suivante
+            GameState.heldPiece = PieceSystem.create(currentType);
+            GameState.currentPiece = PieceSystem.getNextPiece();
+        }
+
+        // Empêcher de hold à nouveau jusqu'à la prochaine pièce
+        GameState.canHold = false;
+
+        // Vérifier game over
+        if (CollisionSystem.check(GameState.currentPiece.shape, GameState.currentPiece.x, GameState.currentPiece.y)) {
+            this.gameOver();
+            return;
+        }
+
+        RenderSystem.drawHoldPiece();
+        RenderSystem.drawNextPieces();
+
+        GameEvents.emit(EVENTS.PIECE_HOLD, { held: GameState.heldPiece.type });
+    },
+
     lockPiece() {
         const piece = GameState.currentPiece;
 
@@ -523,9 +634,6 @@ const GameSystem = {
         this.spawnPiece();
     },
 
-    /**
-     * Effacer les lignes complètes
-     */
     clearLines() {
         let linesCleared = 0;
         const { ROWS, COLS } = CONFIG.BOARD;
@@ -535,22 +643,17 @@ const GameSystem = {
                 GameState.board.splice(row, 1);
                 GameState.board.unshift(new Array(COLS).fill(0));
                 linesCleared++;
-                row++; // Revérifier cette ligne
+                row++;
             }
         }
 
         if (linesCleared > 0) {
-            // Score
             const points = ScoreSystem.calculateLineScore(linesCleared);
             ScoreSystem.add(points);
-
-            // Combo
             ScoreSystem.handleCombo(linesCleared);
 
-            // Lignes totales
             GameState.lines += linesCleared;
 
-            // Level up
             const newLevel = Math.floor(GameState.lines / CONFIG.SCORING.LINES_PER_LEVEL) + 1;
             if (newLevel > GameState.level) {
                 GameState.level = newLevel;
@@ -561,7 +664,6 @@ const GameSystem = {
                 GameEvents.emit(EVENTS.LEVEL_UP, { level: GameState.level });
             }
 
-            // Événement
             GameEvents.emit(EVENTS.LINES_CLEAR, { count: linesCleared, total: GameState.lines });
 
             this.updateUI();
@@ -570,15 +672,12 @@ const GameSystem = {
         }
     },
 
-    /**
-     * Pause/Resume
-     */
     togglePause() {
         GameState.isPaused = !GameState.isPaused;
 
         if (GameState.isPaused) {
             DOM.overlayTitle.textContent = 'PAUSE';
-            DOM.overlayMessage.textContent = 'Appuyez sur ESPACE pour continuer';
+            DOM.overlayMessage.textContent = 'Appuyez sur P pour continuer';
             DOM.finalScore.textContent = '';
             DOM.overlay.classList.remove('hidden');
             GameEvents.emit(EVENTS.GAME_PAUSE);
@@ -590,9 +689,6 @@ const GameSystem = {
         }
     },
 
-    /**
-     * Game Over
-     */
     gameOver() {
         GameState.isRunning = false;
         cancelAnimationFrame(GameState.animationId);
@@ -609,9 +705,6 @@ const GameSystem = {
         });
     },
 
-    /**
-     * Mettre à jour l'interface
-     */
     updateUI() {
         DOM.score.textContent = Utils.formatNumber(GameState.score);
         DOM.lines.textContent = GameState.lines;
@@ -624,9 +717,6 @@ const GameSystem = {
         });
     },
 
-    /**
-     * Boucle de jeu principale
-     */
     gameLoop(timestamp = 0) {
         if (!GameState.isRunning || GameState.isPaused) return;
 
@@ -651,18 +741,28 @@ const InputSystem = {
     handleKeyDown(e) {
         const code = e.code;
 
-        // Espace - Start / Pause
+        // Espace - Start ou Hard Drop
         if (code === 'Space') {
             e.preventDefault();
             if (!GameState.isRunning) {
                 GameSystem.start();
-            } else {
+            } else if (!GameState.isPaused && GameState.currentPiece) {
+                // Hard Drop en jeu
+                GameSystem.hardDrop();
+            }
+            return;
+        }
+
+        // P ou Escape - Pause
+        if (code === 'KeyP' || code === 'Escape') {
+            e.preventDefault();
+            if (GameState.isRunning) {
                 GameSystem.togglePause();
             }
             return;
         }
 
-        // Musique
+        // M - Musique
         if (code === 'KeyM') {
             e.preventDefault();
             toggleMusic();
@@ -675,6 +775,15 @@ const InputSystem = {
         const piece = GameState.currentPiece;
 
         switch (code) {
+            // Hold
+            case 'KeyC':
+            case 'ShiftLeft':
+            case 'ShiftRight':
+                e.preventDefault();
+                GameSystem.holdPiece();
+                break;
+
+            // Gauche
             case 'ArrowLeft':
             case 'KeyA':
                 e.preventDefault();
@@ -684,6 +793,7 @@ const InputSystem = {
                 }
                 break;
 
+            // Droite
             case 'ArrowRight':
             case 'KeyD':
                 e.preventDefault();
@@ -693,6 +803,7 @@ const InputSystem = {
                 }
                 break;
 
+            // Soft Drop
             case 'ArrowDown':
             case 'KeyS':
                 e.preventDefault();
@@ -701,6 +812,7 @@ const InputSystem = {
                 }
                 break;
 
+            // Rotation horaire
             case 'ArrowUp':
             case 'KeyW':
             case 'KeyX':
@@ -708,6 +820,7 @@ const InputSystem = {
                 InputSystem.tryRotate(true);
                 break;
 
+            // Rotation anti-horaire
             case 'KeyZ':
                 e.preventDefault();
                 InputSystem.tryRotate(false);
@@ -721,14 +834,10 @@ const InputSystem = {
         delete InputSystem.keysDown[e.code];
     },
 
-    /**
-     * Tenter une rotation avec wall kicks
-     */
     tryRotate(clockwise = true) {
         const piece = GameState.currentPiece;
         const rotated = PieceSystem.rotate(piece.shape, clockwise);
 
-        // Wall kicks simples
         const kicks = [0, -1, 1, -2, 2];
 
         for (const kick of kicks) {
@@ -746,7 +855,7 @@ const InputSystem = {
 };
 
 // ===================
-// MUSIQUE (interface avec music.js)
+// MUSIQUE
 // ===================
 function toggleMusic() {
     const isPlaying = chillMusic.toggle();

@@ -232,6 +232,39 @@ body::before {
     border-radius: 10px;
 }
 
+/* Hold Box */
+.hold-box {
+    padding: 15px;
+}
+
+.hold-box h3 {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.key-hint {
+    font-size: 0.6rem;
+    opacity: 0.6;
+    font-weight: 400;
+}
+
+#holdPiece {
+    display: block;
+    margin: 10px auto 0;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 10px;
+}
+
+.hold-box.disabled {
+    opacity: 0.5;
+}
+
+.hold-box.disabled #holdPiece {
+    filter: grayscale(0.5);
+}
+
 .controls-box {
     background: rgba(20, 20, 50, 0.8);
     border: 2px solid rgba(123, 47, 255, 0.3);
