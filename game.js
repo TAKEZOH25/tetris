@@ -46,6 +46,7 @@ const GameState = {
     lockDelayTimeout: null,
     lockMoveCount: 0,
     isLocking: false,
+    gridEffects: [],     // Liste des effets visuels sur la grille (ex: lock flash)
 
     // Reset complet
     reset() {
@@ -72,6 +73,7 @@ const GameState = {
             clearTimeout(this.lockDelayTimeout);
             this.lockDelayTimeout = null;
         }
+        this.gridEffects = [];
     }
 };
 
@@ -254,6 +256,35 @@ const RenderSystem = {
     },
 
     /**
+     * Dessiner un flash de cellule (Lock Flash)
+     */
+    drawGridEffects() {
+        const { ctx, gridEffects } = GameState;
+        const size = CONFIG.BOARD.BLOCK_SIZE;
+        const now = performance.now();
+
+        for (let i = gridEffects.length - 1; i >= 0; i--) {
+            const effect = gridEffects[i];
+            const elapsed = now - effect.startTime;
+            const progress = elapsed / effect.duration;
+
+            if (progress >= 1) {
+                gridEffects.splice(i, 1);
+                continue;
+            }
+
+            const alpha = (1 - progress) * 0.8;
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+            ctx.fillRect(
+                effect.x * size,
+                effect.y * size,
+                size,
+                size
+            );
+        }
+    },
+
+    /**
      * Dessiner une pièce (générique, pour les previews)
      */
     drawPiecePreview(ctx, piece, offsetX, offsetY, size) {
@@ -330,6 +361,9 @@ const RenderSystem = {
         if (GameState.currentPiece) {
             this.drawCurrentPiece();
         }
+
+        // Dessiner les effets de grille (Lock Flash, etc.)
+        this.drawGridEffects();
     },
 
     /**
@@ -340,7 +374,10 @@ const RenderSystem = {
         const ghostY = CollisionSystem.getGhostY(piece);
 
         if (ghostY !== piece.y) {
-            GameState.ctx.globalAlpha = CONFIG.VISUALS.GHOST_OPACITY;
+            // Opacité pulsante pour un effet "laser" actif
+            const pulse = 0.1 * Math.sin(performance.now() / 200);
+            GameState.ctx.globalAlpha = CONFIG.VISUALS.GHOST_OPACITY + pulse;
+
             for (let row = 0; row < piece.shape.length; row++) {
                 for (let col = 0; col < piece.shape[row].length; col++) {
                     if (piece.shape[row][col]) {
@@ -731,6 +768,21 @@ const GameSystem = {
                     }
 
                     GameState.board[y][x] = piece.shape[row][col];
+
+                    // Ajouter un effet de flash
+                    GameState.gridEffects.push({
+                        x: x,
+                        y: y,
+                        startTime: performance.now(),
+                        duration: 300,
+                        type: 'lock'
+                    });
+
+                    // Particules de contact
+                    if (typeof ParticleSystem !== 'undefined') {
+                        const color = CONFIG.COLOR_MAP[piece.shape[row][col]];
+                        ParticleSystem.createLandingEffect(x, y, color);
+                    }
                 }
             }
         }
@@ -771,7 +823,11 @@ const GameSystem = {
                 GameEvents.emit(EVENTS.LEVEL_UP, { level: GameState.level });
             }
 
-            GameEvents.emit(EVENTS.LINES_CLEAR, { count: linesCleared, total: GameState.lines });
+            GameEvents.emit(EVENTS.LINES_CLEAR, {
+                count: linesCleared,
+                total: GameState.lines,
+                points: points
+            });
 
             this.updateUI();
         } else {

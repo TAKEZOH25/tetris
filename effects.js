@@ -190,6 +190,28 @@ const ParticleSystem = {
     },
 
     /**
+     * Créer des particules de contact (Landing)
+     */
+    createLandingEffect(x, y, color) {
+        const size = CONFIG.BOARD.BLOCK_SIZE;
+        const count = 3;
+
+        for (let i = 0; i < count; i++) {
+            this.particles.push({
+                x: (x + Math.random()) * size,
+                y: (y + 1) * size, // Au bas du bloc
+                vx: (Math.random() - 0.5) * 4,
+                vy: (Math.random() - 1) * 2, // Vers le haut
+                life: 1.0,
+                decay: 0.02 + Math.random() * 0.02,
+                color: color,
+                size: 1 + Math.random() * 2,
+                type: 'dust'
+            });
+        }
+    },
+
+    /**
      * Mettre à jour les particules
      */
     update() {
@@ -545,15 +567,43 @@ function initVisualEffects() {
     document.head.appendChild(style);
 
     // Écouter les événements du jeu
+    // Fonction utilitaire pour animer une boîte d'info
+    const animateStatBox = (boxId, valueId) => {
+        const box = document.getElementById(boxId) || (boxId.startsWith('.') ? document.querySelector(boxId) : null);
+        const value = document.getElementById(valueId);
+
+        if (box) {
+            box.classList.remove('stat-update');
+            void box.offsetWidth; // Force reflow
+            box.classList.add('stat-update');
+        }
+
+        if (value) {
+            value.classList.remove('value-update');
+            void value.offsetWidth; // Force reflow
+            value.classList.add('value-update');
+        }
+    };
+
     GameEvents.on(EVENTS.LINES_CLEAR, (data) => {
         // Créer les particules pour chaque ligne
-        const { ROWS } = CONFIG.BOARD;
+        const { ROWS, BLOCK_SIZE } = CONFIG.BOARD;
         for (let row = ROWS - data.count; row < ROWS; row++) {
             ParticleSystem.createLineClear(row);
         }
 
         // Shake proportionnel au nombre de lignes
         AnimationSystem.screenShake(data.count * 2, 150 + data.count * 50);
+
+        // Animer la boîte des lignes
+        animateStatBox('.info-box:has(#lines)', 'lines');
+
+        // Points flottants sur le plateau
+        if (data.points > 0) {
+            const x = (CONFIG.BOARD.COLS / 2) * BLOCK_SIZE;
+            const y = (ROWS - data.count) * BLOCK_SIZE;
+            AnimationSystem.showScorePopup(`+${data.points}`, x, y, '#00f5ff');
+        }
     });
 
     GameEvents.on(EVENTS.TETRIS, () => {
@@ -575,24 +625,24 @@ function initVisualEffects() {
     GameEvents.on(EVENTS.LEVEL_UP, (data) => {
         AnimationSystem.showLevelUp(data.level);
         VisualIndicators.levelGlow();
+
+        // Animer la boîte du niveau
+        animateStatBox('.info-box:has(#level)', 'level');
     });
 
     GameEvents.on(EVENTS.PIECE_HARD_DROP, (data) => {
         if (GameState.currentPiece) {
             const piece = GameState.currentPiece;
             ParticleSystem.createHardDropEffect(piece.x, piece.y, piece.shape[0].length);
+
+            // Secousse d'impact
+            AnimationSystem.screenShake(3, 100);
         }
     });
 
     GameEvents.on(EVENTS.SCORE_UPDATE, (data) => {
-        // Animation subtile du score
-        const scoreEl = document.getElementById('score');
-        if (scoreEl) {
-            scoreEl.style.transform = 'scale(1.1)';
-            setTimeout(() => {
-                scoreEl.style.transform = 'scale(1)';
-            }, 100);
-        }
+        // Nouvelle animation premium du score
+        animateStatBox('.info-box:has(#score)', 'score');
     });
 
     console.log('✨ Effets visuels initialisés');

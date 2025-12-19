@@ -12,6 +12,21 @@ body {
     background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 50%, #0a0a2a 100%);
     font-family: 'Rajdhani', sans-serif;
     overflow: hidden;
+    animation: bgPulse 8s ease-in-out infinite;
+}
+
+@keyframes bgPulse {
+
+    0%,
+    100% {
+        background-position: 0% 0%;
+        filter: brightness(1);
+    }
+
+    50% {
+        background-position: 5% 5%;
+        filter: brightness(1.1);
+    }
 }
 
 body::before {
@@ -404,13 +419,39 @@ body::before {
     }
 
     50% {
-        transform: scale(1.2);
-        color: #00ffff;
+        transform: scale(1.1);
+        color: #00f5ff;
     }
 
     100% {
         transform: scale(1);
     }
+}
+
+@keyframes boxUpdate {
+    0% {
+        transform: scale(1);
+        border-color: rgba(0, 245, 255, 0.3);
+    }
+
+    30% {
+        transform: scale(1.05);
+        border-color: #00f5ff;
+        box-shadow: 0 0 20px rgba(0, 245, 255, 0.4);
+    }
+
+    100% {
+        transform: scale(1);
+        border-color: rgba(0, 245, 255, 0.3);
+    }
+}
+
+.stat-update {
+    animation: boxUpdate 0.4s ease-out;
+}
+
+.value-update {
+    animation: valuePulse 0.4s ease-out;
 }
 
 /* Canvas de particules */
