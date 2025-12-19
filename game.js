@@ -41,6 +41,8 @@ const GameState = {
     dropInterval: CONFIG.TIMING.BASE_DROP_INTERVAL,
     lastDropTime: 0,
     animationId: null,
+    startTime: 0,
+    totalSessionTime: 0, // Temps accumulé dans la session actuelle
 
     // Lock Delay (Couche 2)
     lockDelayTimeout: null,
@@ -74,6 +76,7 @@ const GameState = {
             this.lockDelayTimeout = null;
         }
         this.gridEffects = [];
+        this.totalSessionTime = 0;
     }
 };
 
@@ -99,6 +102,7 @@ const DOM = {
         this.overlayMessage = document.getElementById('overlayMessage');
         this.finalScore = document.getElementById('finalScore');
         this.holdBox = document.querySelector('.hold-box');
+        this.resumeBtn = document.getElementById('resumeBtn');
     }
 };
 
@@ -319,6 +323,50 @@ const RenderSystem = {
     },
 
     /**
+     * Mettre à jour l'affichage des High Scores
+     */
+    drawHighScores(currentScore = null) {
+        const container = document.getElementById('highScoresList');
+        if (!container) return;
+
+        const scores = StorageSystem.data.highScores;
+        container.innerHTML = '';
+
+        if (scores.length === 0) {
+            container.innerHTML = '<div class="score-entry"><span class="pts">Aucun record pour le moment</span></div>';
+            return;
+        }
+
+        scores.forEach((entry, index) => {
+            const isLatest = entry.score === currentScore;
+            const div = document.createElement('div');
+            div.className = `score-entry ${isLatest ? 'new-record' : ''}`;
+            div.innerHTML = `
+                <span class="rank">${index + 1}.</span>
+                <span class="pts">${Utils.formatNumber(entry.score)}</span>
+                <span class="date">${entry.date}</span>
+            `;
+            container.appendChild(div);
+        });
+    },
+
+    /**
+     * Mettre à jour l'affichage des Stats Globales
+     */
+    drawStats() {
+        const stats = StorageSystem.data.stats;
+        const els = {
+            games: document.getElementById('statGames'),
+            lines: document.getElementById('statLines'),
+            best: document.getElementById('statBest')
+        };
+
+        if (els.games) els.games.textContent = Utils.formatNumber(stats.gamesPlayed);
+        if (els.lines) els.lines.textContent = Utils.formatNumber(stats.totalLines);
+        if (els.best) els.best.textContent = Utils.formatNumber(stats.bestScore);
+    },
+
+    /**
      * Dessiner le plateau complet
      */
     drawBoard() {
@@ -533,8 +581,27 @@ const GameSystem = {
         // DOM
         DOM.init();
 
+        // Charger les records et stats dans l'overlay
+        RenderSystem.drawHighScores();
+        RenderSystem.drawStats();
+
+        // Charger les préférences (Volume Musique)
+        if (typeof chillMusic !== 'undefined' && StorageSystem.data.settings.musicVolume) {
+            chillMusic.musicVolume = StorageSystem.data.settings.musicVolume;
+        }
+
         // Initialiser le système d'input (DAS/ARR)
         InputSystem.init();
+
+        // Gérer le bouton de reprise
+        if (DOM.resumeBtn) {
+            if (StorageSystem.data.lastGame) {
+                DOM.resumeBtn.classList.remove('hidden');
+                DOM.resumeBtn.onclick = () => this.resume();
+            } else {
+                DOM.resumeBtn.classList.add('hidden');
+            }
+        }
 
         this.setupEventListeners();
 
@@ -566,6 +633,8 @@ const GameSystem = {
 
     start() {
         GameState.reset();
+        StorageSystem.clearLastGame(); // Nouvelle partie, on efface la reprise possible
+        if (DOM.resumeBtn) DOM.resumeBtn.classList.add('hidden');
         InputSystem.reset();  // Reset DAS/ARR state
         GameState.isRunning = true;
         GameState.isPaused = false;
@@ -583,7 +652,45 @@ const GameSystem = {
         DOM.overlay.classList.add('hidden');
 
         GameEvents.emit(EVENTS.GAME_START);
+        GameState.startTime = performance.now();
+        GameState.lastDropTime = performance.now();
+        this.gameLoop();
+    },
 
+    resume() {
+        const lastGame = StorageSystem.data.lastGame;
+        if (!lastGame) return;
+
+        GameState.reset();
+        GameState.board = lastGame.board;
+        GameState.score = lastGame.score;
+        GameState.level = lastGame.level;
+        GameState.lines = lastGame.lines;
+
+        if (lastGame.heldPiece) {
+            GameState.heldPiece = PieceSystem.create(lastGame.heldPiece);
+        }
+
+        // Restaurer la file d'attente
+        if (lastGame.nextPieces) {
+            GameState.nextPieces = lastGame.nextPieces.map(type => PieceSystem.create(type));
+        }
+        if (lastGame.pieceBag) {
+            GameState.pieceBag = lastGame.pieceBag;
+        }
+
+        GameState.isRunning = true;
+        GameState.isPaused = false;
+
+        this.updateUI();
+        PieceSystem.fillNextPieces();
+        this.spawnPiece();
+
+        DOM.overlay.classList.add('hidden');
+        if (DOM.resumeBtn) DOM.resumeBtn.classList.add('hidden');
+
+        GameEvents.emit(EVENTS.GAME_START);
+        GameState.startTime = performance.now();
         GameState.lastDropTime = performance.now();
         this.gameLoop();
     },
@@ -789,6 +896,17 @@ const GameSystem = {
 
         GameEvents.emit(EVENTS.PIECE_LOCK, { piece });
 
+        // Sauvegarder l'état pour reprise éventuelle (Layer 5.4)
+        StorageSystem.saveGameState({
+            board: GameState.board,
+            score: GameState.score,
+            level: GameState.level,
+            lines: GameState.lines,
+            heldPiece: GameState.heldPiece ? GameState.heldPiece.type : null,
+            nextPieces: GameState.nextPieces.map(p => p.type),
+            pieceBag: GameState.pieceBag
+        });
+
         this.clearLines();
         this.spawnPiece();
     },
@@ -839,6 +957,7 @@ const GameSystem = {
         GameState.isPaused = !GameState.isPaused;
 
         if (GameState.isPaused) {
+            GameState.totalSessionTime += (performance.now() - GameState.startTime) / 1000;
             DOM.overlayTitle.textContent = 'PAUSE';
             DOM.overlayMessage.textContent = 'Appuyez sur P pour continuer';
             DOM.finalScore.textContent = '';
@@ -846,6 +965,7 @@ const GameSystem = {
             GameEvents.emit(EVENTS.GAME_PAUSE);
         } else {
             DOM.overlay.classList.add('hidden');
+            GameState.startTime = performance.now();
             GameState.lastDropTime = performance.now();
             GameEvents.emit(EVENTS.GAME_RESUME);
             this.gameLoop();
@@ -861,6 +981,19 @@ const GameSystem = {
         DOM.finalScore.textContent = `Score: ${Utils.formatNumber(GameState.score)}`;
         DOM.overlay.classList.remove('hidden');
 
+        // Calculer le temps final
+        const sessionSeconds = (performance.now() - GameState.startTime) / 1000;
+        GameState.totalSessionTime += sessionSeconds;
+
+        // PERSISTANCE (Layer 5)
+        // Enregistrer le score et les stats
+        const isHigher = StorageSystem.addScore(GameState.score, GameState.lines, GameState.level);
+        StorageSystem.updateStats(GameState.lines, Math.floor(GameState.totalSessionTime));
+        StorageSystem.clearLastGame(); // Partie finie, on oublie l'état de reprise
+
+        // Afficher le leaderboard et les stats à jour
+        RenderSystem.drawHighScores(GameState.score);
+        RenderSystem.drawStats();
         GameEvents.emit(EVENTS.GAME_OVER, {
             score: GameState.score,
             lines: GameState.lines,
@@ -1213,6 +1346,9 @@ function toggleMusic() {
     }
 
     GameEvents.emit(EVENTS.MUSIC_TOGGLE, { playing: isPlaying });
+
+    // Sauvegarder la préférence de volume/état (Layer 5.3)
+    StorageSystem.saveSettings({ musicVolume: chillMusic.musicVolume, musicPlaying: isPlaying });
 }
 
 // ===================

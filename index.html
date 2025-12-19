@@ -47,6 +47,30 @@
                         <h2 id="overlayTitle">TETRIS</h2>
                         <p id="overlayMessage">Appuyez sur ESPACE pour jouer</p>
                         <div class="final-score" id="finalScore"></div>
+                        <button id="resumeBtn" class="resume-button hidden">Reprendre la partie</button>
+
+                        <div class="high-scores-container" id="highScoresContainer">
+                            <h3>TOP 10 RECORDS</h3>
+                            <div id="highScoresList"></div>
+                        </div>
+
+                        <div class="stats-container" id="statsContainer">
+                            <h3>STATISTIQUES GLOBALES</h3>
+                            <div class="stats-grid">
+                                <div class="stat-item">
+                                    <span class="label">Parties :</span>
+                                    <span id="statGames">0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="label">Lignes :</span>
+                                    <span id="statLines">0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="label">Record :</span>
+                                    <span id="statBest">0</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -94,6 +118,7 @@
     <!-- Fondations -->
     <script src="config.js"></script>
     <script src="events.js"></script>
+    <script src="storage.js"></script>
     <script src="utils.js"></script>
 
     <!-- Modules -->

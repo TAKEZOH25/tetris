@@ -593,3 +593,141 @@ body::before {
         filter: brightness(1.1);
     }
 }
+
+/* High Scores Table */
+.high-scores-container {
+    margin-top: 20px;
+    width: 100%;
+    max-width: 250px;
+    font-family: 'Rajdhani', sans-serif;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 245, 255, 0.1);
+}
+
+.high-scores-container h3 {
+    font-size: 0.9rem;
+    color: #00f5ff;
+    margin-bottom: 8px;
+    border-bottom: 1px solid rgba(0, 245, 255, 0.2);
+    padding-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.score-entry {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 0.8rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.score-entry:last-child {
+    border-bottom: none;
+}
+
+.score-entry .rank {
+    color: #7b2fff;
+    font-weight: bold;
+    width: 20px;
+}
+
+.score-entry .pts {
+    color: #fff;
+    flex-grow: 1;
+    text-align: right;
+    padding-right: 15px;
+}
+
+.score-entry .date {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.7rem;
+    width: 70px;
+    text-align: right;
+}
+
+.new-record {
+    animation: goldGlow 1.5s infinite alternate;
+    color: #ffd700 !important;
+}
+
+@keyframes goldGlow {
+    from {
+        text-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+    }
+
+    to {
+        text-shadow: 0 0 15px rgba(255, 215, 0, 0.8), 0 0 20px rgba(255, 215, 0, 0.5);
+    }
+}
+
+.resume-button {
+    background: linear-gradient(135deg, #7b2fff, #00f5ff);
+    border: none;
+    border-radius: 25px;
+    padding: 10px 20px;
+    color: white;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.9rem;
+    font-weight: bold;
+    cursor: pointer;
+    margin: 15px 0;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 15px rgba(0, 245, 255, 0.3);
+}
+
+.resume-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 25px rgba(0, 245, 255, 0.5);
+}
+
+.resume-button.hidden {
+    display: none;
+}
+
+/* Global Stats Module */
+.stats-container {
+    margin-top: 15px;
+    width: 100%;
+    max-width: 250px;
+    font-family: 'Rajdhani', sans-serif;
+    background: rgba(123, 47, 255, 0.1);
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(123, 47, 255, 0.2);
+}
+
+.stats-container h3 {
+    font-size: 0.8rem;
+    color: #7b2fff;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-align: center;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    text-align: center;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-item .label {
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 2px;
+}
+
+.stat-item span:not(.label) {
+    font-size: 0.85rem;
+    color: #fff;
+    font-weight: bold;
+}
