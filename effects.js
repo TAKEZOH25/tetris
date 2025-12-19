@@ -566,7 +566,12 @@ function initVisualEffects() {
     `;
     document.head.appendChild(style);
 
-    // Écouter les événements du jeu
+    // Fonctions Audio & SFX
+    GameEvents.on(EVENTS.PIECE_MOVE, () => chillMusic.playSFX('move'));
+    GameEvents.on(EVENTS.PIECE_ROTATE, () => chillMusic.playSFX('rotate'));
+    GameEvents.on(EVENTS.PIECE_LOCK, () => chillMusic.playSFX('lock'));
+    GameEvents.on(EVENTS.GAME_OVER, () => chillMusic.playSFX('gameover'));
+
     // Fonction utilitaire pour animer une boîte d'info
     const animateStatBox = (boxId, valueId) => {
         const box = document.getElementById(boxId) || (boxId.startsWith('.') ? document.querySelector(boxId) : null);
@@ -604,6 +609,13 @@ function initVisualEffects() {
             const y = (ROWS - data.count) * BLOCK_SIZE;
             AnimationSystem.showScorePopup(`+${data.points}`, x, y, '#00f5ff');
         }
+
+        // Son de ligne
+        if (data.count === 4) {
+            chillMusic.playSFX('tetris');
+        } else {
+            chillMusic.playSFX('clear');
+        }
     });
 
     GameEvents.on(EVENTS.TETRIS, () => {
@@ -625,6 +637,7 @@ function initVisualEffects() {
     GameEvents.on(EVENTS.LEVEL_UP, (data) => {
         AnimationSystem.showLevelUp(data.level);
         VisualIndicators.levelGlow();
+        chillMusic.playSFX('levelup');
 
         // Animer la boîte du niveau
         animateStatBox('.info-box:has(#level)', 'level');
@@ -645,7 +658,7 @@ function initVisualEffects() {
         animateStatBox('.info-box:has(#score)', 'score');
     });
 
-    console.log('✨ Effets visuels initialisés');
+    console.log('✨ Effets visuels et sonores initialisés');
 }
 
 // Initialiser au chargement
