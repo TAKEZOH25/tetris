@@ -69,15 +69,29 @@ body::before {
 .side-panel {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    min-width: 150px;
+    gap: 15px;
+    /* Réduit de 20px à 15px */
+    min-width: 180px;
+    height: 600px;
+    /* Alignement sur la hauteur du plateau */
+}
+
+/* Panel droit spécifique pour l'alignement */
+.right-panel {
+    justify-content: flex-start;
+}
+
+.right-panel .controls-box {
+    margin-top: auto;
+    /* Pousse les contrôles vers le bas pour l'alignement */
 }
 
 .info-box {
     background: rgba(20, 20, 50, 0.8);
     border: 2px solid rgba(0, 245, 255, 0.3);
     border-radius: 15px;
-    padding: 20px;
+    padding: 12px;
+    /* Réduit pour gagner de la place */
     text-align: center;
     backdrop-filter: blur(10px);
     box-shadow:
@@ -269,7 +283,8 @@ body::before {
     background: rgba(20, 20, 50, 0.8);
     border: 2px solid rgba(123, 47, 255, 0.3);
     border-radius: 15px;
-    padding: 20px;
+    padding: 10px 20px;
+    /* Moins de padding vertical */
     backdrop-filter: blur(10px);
 }
 
@@ -277,7 +292,8 @@ body::before {
     font-family: 'Orbitron', monospace;
     font-size: 0.9rem;
     color: rgba(123, 47, 255, 0.8);
-    margin-bottom: 15px;
+    margin-bottom: 8px;
+    /* Réduit de 15px à 8px */
     letter-spacing: 3px;
     text-align: center;
 }
@@ -286,9 +302,40 @@ body::before {
     display: flex;
     align-items: center;
     gap: 15px;
-    margin-bottom: 10px;
+    margin-bottom: 6px;
+    /* Réduit de 10px à 6px */
     font-size: 0.9rem;
     color: rgba(255, 255, 255, 0.7);
+    transition: all 0.2s ease;
+}
+
+.control-item.clickable {
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 8px;
+}
+
+.control-item.clickable:hover {
+    background: rgba(123, 47, 255, 0.2);
+    color: #fff;
+}
+
+.control-item.clickable:hover .key {
+    background: linear-gradient(135deg, rgba(123, 47, 255, 0.5), rgba(0, 245, 255, 0.5));
+    border-color: rgba(0, 245, 255, 0.8);
+    transform: scale(1.05);
+}
+
+/* État actif pour la musique */
+.control-item.clickable.active {
+    color: #00f5ff;
+}
+
+.control-item.clickable.active .key {
+    background: linear-gradient(135deg, rgba(0, 245, 255, 0.4), rgba(123, 47, 255, 0.4));
+    border-color: #00f5ff;
+    box-shadow: 0 0 10px rgba(0, 245, 255, 0.5);
+    animation: musicPulse 2s ease-in-out infinite;
 }
 
 .control-item:last-child {
@@ -305,48 +352,6 @@ body::before {
     min-width: 60px;
     text-align: center;
     color: #fff;
-}
-
-/* Music Button */
-.music-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    width: 100%;
-    padding: 15px 20px;
-    margin-top: 10px;
-    background: linear-gradient(135deg, rgba(123, 47, 255, 0.2), rgba(0, 245, 255, 0.2));
-    border: 2px solid rgba(123, 47, 255, 0.4);
-    border-radius: 12px;
-    cursor: pointer;
-    font-family: 'Orbitron', monospace;
-    font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.8);
-    transition: all 0.3s ease;
-    backdrop-filter: blur(10px);
-}
-
-.music-btn:hover {
-    background: linear-gradient(135deg, rgba(123, 47, 255, 0.4), rgba(0, 245, 255, 0.4));
-    border-color: rgba(0, 245, 255, 0.8);
-    transform: translateY(-2px);
-    box-shadow: 0 5px 20px rgba(123, 47, 255, 0.3);
-}
-
-.music-btn.active {
-    background: linear-gradient(135deg, rgba(0, 255, 136, 0.3), rgba(0, 245, 255, 0.3));
-    border-color: rgba(0, 255, 136, 0.6);
-    box-shadow: 0 0 20px rgba(0, 255, 136, 0.2);
-}
-
-.music-icon {
-    font-size: 1.2rem;
-    animation: none;
-}
-
-.music-btn.active .music-icon {
-    animation: musicPulse 1s ease-in-out infinite;
 }
 
 @keyframes musicPulse {
@@ -377,5 +382,173 @@ body::before {
     .game-header h1 {
         font-size: 2.5rem;
         letter-spacing: 8px;
+    }
+}
+
+/* ===================
+   EFFETS VISUELS
+   =================== */
+
+/* Score animation */
+.info-box .value {
+    transition: transform 0.1s ease-out, color 0.2s ease;
+}
+
+.info-box .value.pulse {
+    animation: valuePulse 0.3s ease-out;
+}
+
+@keyframes valuePulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.2);
+        color: #00ffff;
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Canvas de particules */
+#particleCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 100;
+}
+
+/* Combo indicator */
+#comboIndicator {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Orbitron', monospace;
+    font-size: 1.5rem;
+    font-weight: bold;
+    pointer-events: none;
+    z-index: 150;
+    text-align: center;
+}
+
+/* Score popup */
+.score-popup {
+    position: absolute;
+    font-family: 'Orbitron', monospace;
+    font-weight: bold;
+    pointer-events: none;
+    z-index: 200;
+    white-space: nowrap;
+}
+
+/* Center text popup */
+.center-text-popup {
+    position: absolute;
+    font-family: 'Orbitron', monospace;
+    font-weight: bold;
+    pointer-events: none;
+    z-index: 200;
+    text-align: center;
+    letter-spacing: 3px;
+}
+
+/* Game board glow effect */
+#gameBoard {
+    transition: box-shadow 0.3s ease, filter 0.2s ease;
+}
+
+#gameBoard.glow-purple {
+    box-shadow: 0 0 30px #7b2fff, 0 0 60px #7b2fff, inset 0 0 30px rgba(123, 47, 255, 0.3);
+}
+
+#gameBoard.glow-cyan {
+    box-shadow: 0 0 30px #00ffff, 0 0 60px #00ffff, inset 0 0 30px rgba(0, 255, 255, 0.3);
+}
+
+/* Flash overlay */
+.flash-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9999;
+    animation: flashFade 100ms ease-out forwards;
+}
+
+@keyframes flashFade {
+    from {
+        opacity: 0.5;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
+/* Level up animation */
+@keyframes levelUpGlow {
+    0% {
+        box-shadow: 0 0 10px #7b2fff;
+    }
+
+    50% {
+        box-shadow: 0 0 50px #7b2fff, 0 0 100px #7b2fff;
+    }
+
+    100% {
+        box-shadow: 0 0 10px #7b2fff;
+    }
+}
+
+/* Tetris highlight */
+@keyframes tetrisFlash {
+
+    0%,
+    100% {
+        filter: brightness(1);
+    }
+
+    50% {
+        filter: brightness(1.5) saturate(1.5);
+    }
+}
+
+.tetris-flash {
+    animation: tetrisFlash 0.2s ease-out 3;
+}
+
+/* Smooth transitions for UI elements */
+.info-box {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.info-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(123, 47, 255, 0.4);
+}
+
+/* Hold box when piece is held */
+.hold-box.has-piece canvas {
+    animation: gentlePulse 2s ease-in-out infinite;
+}
+
+@keyframes gentlePulse {
+
+    0%,
+    100% {
+        filter: brightness(1);
+    }
+
+    50% {
+        filter: brightness(1.1);
     }
 }

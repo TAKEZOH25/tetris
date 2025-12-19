@@ -97,6 +97,7 @@ const EVENTS = {
     PIECE_LOCK: 'piece:lock',
     PIECE_HOLD: 'piece:hold',
     PIECE_HARD_DROP: 'piece:hardDrop',
+    PIECE_SOFT_DROP: 'piece:softDrop',
 
     // Scoring
     LINES_CLEAR: 'lines:clear',

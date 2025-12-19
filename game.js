@@ -1,6 +1,6 @@
 /**
  * TETRIS - Logique du jeu principale
- * Couche 1: Hard Drop, Hold, Preview 3 pièces, 7-Bag
+ * Couche 2: DAS/ARR, Soft Drop variable, SRS (Super Rotation System)
  */
 
 // ===================
@@ -42,6 +42,11 @@ const GameState = {
     lastDropTime: 0,
     animationId: null,
 
+    // Lock Delay (Couche 2)
+    lockDelayTimeout: null,
+    lockMoveCount: 0,
+    isLocking: false,
+
     // Reset complet
     reset() {
         this.board = [];
@@ -59,6 +64,14 @@ const GameState = {
         this.combo = 0;
         this.dropInterval = CONFIG.TIMING.BASE_DROP_INTERVAL;
         this.lastDropTime = 0;
+
+        // Reset lock delay
+        this.lockMoveCount = 0;
+        this.isLocking = false;
+        if (this.lockDelayTimeout) {
+            clearTimeout(this.lockDelayTimeout);
+            this.lockDelayTimeout = null;
+        }
     }
 };
 
@@ -245,11 +258,17 @@ const RenderSystem = {
      */
     drawPiecePreview(ctx, piece, offsetX, offsetY, size) {
         const shape = piece.shape;
+        ctx.save();
+
         for (let row = 0; row < shape.length; row++) {
             for (let col = 0; col < shape[row].length; col++) {
                 if (shape[row][col]) {
                     const x = offsetX + col * size;
                     const y = offsetY + row * size;
+
+                    // Effet de lueur locale (subtile)
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = CONFIG.COLOR_MAP[shape[row][col]];
 
                     const gradient = ctx.createLinearGradient(x, y, x + size, y + size);
                     gradient.addColorStop(0, CONFIG.COLOR_MAP[shape[row][col]]);
@@ -258,11 +277,14 @@ const RenderSystem = {
                     ctx.fillStyle = gradient;
                     ctx.fillRect(x + 1, y + 1, size - 2, size - 2);
 
+                    // Reflet
+                    ctx.shadowBlur = 0; // Désamorcer pour le reflet
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
                     ctx.fillRect(x + 1, y + 1, size - 2, (size - 2) / 4);
                 }
             }
         }
+        ctx.restore();
     },
 
     /**
@@ -359,20 +381,28 @@ const RenderSystem = {
      */
     drawNextPieces() {
         const { nextCtx, nextCanvas, nextPieces } = GameState;
-        const size = 20;
-        const spacing = 90;
+        const size = CONFIG.PREVIEW.BLOCK_SIZE;
+        const count = CONFIG.PREVIEW.COUNT;
 
-        nextCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        // Calculer l'espacement dynamiquement
+        const spacing = nextCanvas.height / count;
+
+        // Effacer proprement le canvas pour éviter l'accumulation
+        nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+        nextCtx.fillStyle = '#050510'; // Fond solide pour la boîte
         nextCtx.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
 
-        nextPieces.forEach((piece, index) => {
+        // On ne dessine que le nombre de pièces configuré
+        nextPieces.slice(0, count).forEach((piece, index) => {
             if (!piece) return;
 
             const shape = piece.shape;
             const pieceWidth = shape[0].length * size;
             const pieceHeight = shape.length * size;
+
+            // Centrage horizontal et vertical dans sa section
             const offsetX = (nextCanvas.width - pieceWidth) / 2;
-            const offsetY = 10 + index * spacing + (spacing - pieceHeight) / 2;
+            const offsetY = (index * spacing) + (spacing - pieceHeight) / 2;
 
             this.drawPiecePreview(nextCtx, piece, offsetX, offsetY, size);
         });
@@ -385,7 +415,9 @@ const RenderSystem = {
         const { holdCtx, holdCanvas, heldPiece, canHold } = GameState;
         const size = 20;
 
-        holdCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        // Effacer proprement le canvas
+        holdCtx.clearRect(0, 0, holdCanvas.width, holdCanvas.height);
+        holdCtx.fillStyle = '#050510';
         holdCtx.fillRect(0, 0, holdCanvas.width, holdCanvas.height);
 
         // Afficher l'état disabled
@@ -464,9 +496,8 @@ const GameSystem = {
         // DOM
         DOM.init();
 
-        // Événements
-        document.addEventListener('keydown', InputSystem.handleKeyDown);
-        document.addEventListener('keyup', InputSystem.handleKeyUp);
+        // Initialiser le système d'input (DAS/ARR)
+        InputSystem.init();
 
         this.setupEventListeners();
 
@@ -476,7 +507,7 @@ const GameSystem = {
         RenderSystem.drawNextPieces();
         RenderSystem.drawHoldPiece();
 
-        console.log('🎮 Tetris v1.1 - Couche 1 (Hard Drop, Hold, Preview 3)');
+        console.log('🎮 Tetris v2.0 - Couche 2 (DAS/ARR, Soft Drop, SRS)');
     },
 
     setupEventListeners() {
@@ -498,6 +529,7 @@ const GameSystem = {
 
     start() {
         GameState.reset();
+        InputSystem.reset();  // Reset DAS/ARR state
         GameState.isRunning = true;
         GameState.isPaused = false;
 
@@ -523,6 +555,10 @@ const GameSystem = {
         GameState.currentPiece = PieceSystem.getNextPiece();
         GameState.canHold = true;
 
+        // Reset lock delay state for new piece
+        GameState.lockMoveCount = 0;
+        GameState.isLocking = false;
+
         if (CollisionSystem.check(GameState.currentPiece.shape, GameState.currentPiece.x, GameState.currentPiece.y)) {
             this.gameOver();
             return;
@@ -537,12 +573,75 @@ const GameSystem = {
      * Soft Drop - descendre d'une case
      */
     dropPiece() {
-        if (!CollisionSystem.check(GameState.currentPiece.shape, GameState.currentPiece.x, GameState.currentPiece.y + 1)) {
-            GameState.currentPiece.y++;
+        const piece = GameState.currentPiece;
+        if (!piece) return false;
+
+        if (!CollisionSystem.check(piece.shape, piece.x, piece.y + 1)) {
+            piece.y++;
+            // Si on descend, on peut potentiellement réinitialiser le lock delay si on était en train de locker
+            if (GameState.isLocking) {
+                this.resetLockDelay();
+            }
             return true;
         } else {
-            this.lockPiece();
+            // Touche le sol : démarrer le lock delay s'il n'est pas déjà actif
+            if (!GameState.isLocking) {
+                this.startLockDelay();
+            }
             return false;
+        }
+    },
+
+    /**
+     * Gère le délai avant verrouillage
+     */
+    startLockDelay() {
+        if (GameState.isLocking) return;
+
+        GameState.isLocking = true;
+        GameState.lockDelayTimeout = setTimeout(() => {
+            if (GameState.isLocking && GameState.isRunning && !GameState.isPaused) {
+                this.lockPiece();
+            }
+        }, CONFIG.TIMING.LOCK_DELAY);
+    },
+
+    /**
+     * Réinitialise le délai de verrouillage (Extended Placement)
+     */
+    resetLockDelay() {
+        if (!GameState.isLocking) return;
+
+        // Vérifier si la pièce est toujours au sol
+        const onGround = CollisionSystem.check(
+            GameState.currentPiece.shape,
+            GameState.currentPiece.x,
+            GameState.currentPiece.y + 1
+        );
+
+        if (!onGround) {
+            // Plus au sol (ex: tombée dans un trou après un wall kick ou mouvement)
+            GameState.isLocking = false;
+            if (GameState.lockDelayTimeout) {
+                clearTimeout(GameState.lockDelayTimeout);
+                GameState.lockDelayTimeout = null;
+            }
+            return;
+        }
+
+        // Toujours au sol : réinitialiser le timer si on n'a pas dépassé le max de mouvements
+        if (GameState.lockMoveCount < CONFIG.TIMING.LOCK_MOVES_MAX) {
+            GameState.lockMoveCount++;
+
+            if (GameState.lockDelayTimeout) {
+                clearTimeout(GameState.lockDelayTimeout);
+            }
+
+            GameState.lockDelayTimeout = setTimeout(() => {
+                if (GameState.isLocking && GameState.isRunning && !GameState.isPaused) {
+                    this.lockPiece();
+                }
+            }, CONFIG.TIMING.LOCK_DELAY);
         }
     },
 
@@ -611,6 +710,14 @@ const GameSystem = {
 
     lockPiece() {
         const piece = GameState.currentPiece;
+        if (!piece) return;
+
+        // Arrêter tout timer de lock en cours
+        GameState.isLocking = false;
+        if (GameState.lockDelayTimeout) {
+            clearTimeout(GameState.lockDelayTimeout);
+            GameState.lockDelayTimeout = null;
+        }
 
         for (let row = 0; row < piece.shape.length; row++) {
             for (let col = 0; col < piece.shape[row].length; col++) {
@@ -720,6 +827,9 @@ const GameSystem = {
     gameLoop(timestamp = 0) {
         if (!GameState.isRunning || GameState.isPaused) return;
 
+        // Mise à jour du système d'input (DAS/ARR + Soft Drop)
+        InputSystem.update(timestamp);
+
         const deltaTime = timestamp - GameState.lastDropTime;
 
         if (deltaTime > GameState.dropInterval) {
@@ -733,13 +843,143 @@ const GameSystem = {
 };
 
 // ===================
-// SYSTÈME D'INPUT
+// SYSTÈME D'INPUT (DAS/ARR + Soft Drop)
 // ===================
 const InputSystem = {
-    keysDown: {},
+    // État des touches
+    keysDown: new Set(),
 
+    // DAS (Delayed Auto Shift) state
+    das: {
+        direction: null,      // 'left' ou 'right'
+        startTime: 0,         // Quand la touche a été pressée
+        dasActive: false,     // DAS delay passé?
+        lastArrTime: 0        // Dernier mouvement ARR
+    },
+
+    // Soft Drop state
+    softDrop: {
+        active: false,
+        lastDropTime: 0
+    },
+
+    // Initialisation
+    init() {
+        document.addEventListener('keydown', (e) => this.handleKeyDown(e));
+        document.addEventListener('keyup', (e) => this.handleKeyUp(e));
+    },
+
+    // Mise à jour appelée chaque frame
+    update(timestamp) {
+        if (!GameState.isRunning || GameState.isPaused || !GameState.currentPiece) return;
+
+        // Gérer DAS/ARR pour mouvement horizontal
+        this.updateDAS(timestamp);
+
+        // Gérer Soft Drop continu
+        this.updateSoftDrop(timestamp);
+    },
+
+    // DAS/ARR pour mouvement horizontal fluide
+    updateDAS(timestamp) {
+        if (!this.das.direction) return;
+
+        const piece = GameState.currentPiece;
+        const dx = this.das.direction === 'left' ? -1 : 1;
+        const elapsed = timestamp - this.das.startTime;
+
+        // Phase DAS: attendre le délai initial
+        if (!this.das.dasActive) {
+            if (elapsed >= CONFIG.TIMING.DAS_DELAY) {
+                this.das.dasActive = true;
+                this.das.lastArrTime = timestamp;
+                // Premier mouvement après DAS
+                if (!CollisionSystem.check(piece.shape, piece.x + dx, piece.y)) {
+                    piece.x += dx;
+                    GameEvents.emit(EVENTS.PIECE_MOVE, { direction: this.das.direction });
+                    GameSystem.resetLockDelay();
+                }
+            }
+            return;
+        }
+
+        // Phase ARR: mouvements répétés
+        const arrElapsed = timestamp - this.das.lastArrTime;
+        if (arrElapsed >= CONFIG.TIMING.ARR_DELAY) {
+            if (!CollisionSystem.check(piece.shape, piece.x + dx, piece.y)) {
+                piece.x += dx;
+                GameEvents.emit(EVENTS.PIECE_MOVE, { direction: this.das.direction });
+                GameSystem.resetLockDelay();
+                this.das.lastArrTime = timestamp;
+            }
+        }
+    },
+
+    // Soft Drop continu
+    updateSoftDrop(timestamp) {
+        if (!this.softDrop.active) return;
+
+        const elapsed = timestamp - this.softDrop.lastDropTime;
+        if (elapsed >= CONFIG.TIMING.SOFT_DROP_INTERVAL) {
+            if (GameSystem.dropPiece()) {
+                ScoreSystem.add(CONFIG.SCORING.SOFT_DROP);
+                GameEvents.emit(EVENTS.PIECE_SOFT_DROP);
+            }
+            this.softDrop.lastDropTime = timestamp;
+        }
+    },
+
+    // Démarrer le mouvement horizontal (pour DAS)
+    startHorizontalMove(direction) {
+        const piece = GameState.currentPiece;
+        if (!piece) return;
+
+        const dx = direction === 'left' ? -1 : 1;
+
+        // Mouvement immédiat
+        if (!CollisionSystem.check(piece.shape, piece.x + dx, piece.y)) {
+            piece.x += dx;
+            GameEvents.emit(EVENTS.PIECE_MOVE, { direction });
+            GameSystem.resetLockDelay();
+            RenderSystem.drawBoard();
+        }
+
+        // Initialiser DAS
+        this.das.direction = direction;
+        this.das.startTime = performance.now();
+        this.das.dasActive = false;
+        this.das.lastArrTime = 0;
+    },
+
+    // Arrêter le mouvement horizontal
+    stopHorizontalMove(direction) {
+        if (this.das.direction === direction) {
+            // Vérifier si l'autre direction est encore pressée
+            const oppositeDir = direction === 'left' ? 'right' : 'left';
+            const oppositeKeys = oppositeDir === 'left'
+                ? ['ArrowLeft', 'KeyA']
+                : ['ArrowRight', 'KeyD'];
+
+            const hasOpposite = oppositeKeys.some(key => this.keysDown.has(key));
+
+            if (hasOpposite) {
+                // Basculer vers l'autre direction
+                this.startHorizontalMove(oppositeDir);
+            } else {
+                // Réinitialiser DAS
+                this.das.direction = null;
+                this.das.dasActive = false;
+            }
+        }
+    },
+
+    // Gestion keydown
     handleKeyDown(e) {
         const code = e.code;
+
+        // Éviter les répétitions clavier natives
+        if (this.keysDown.has(code)) return;
+        this.keysDown.add(code);
 
         // Espace - Start ou Hard Drop
         if (code === 'Space') {
@@ -747,14 +987,20 @@ const InputSystem = {
             if (!GameState.isRunning) {
                 GameSystem.start();
             } else if (!GameState.isPaused && GameState.currentPiece) {
-                // Hard Drop en jeu
                 GameSystem.hardDrop();
             }
             return;
         }
 
+        // M - Musique
+        if (code === 'KeyM' || e.key === 'm' || e.key === 'M') {
+            e.preventDefault();
+            toggleMusic();
+            return;
+        }
+
         // P ou Escape - Pause
-        if (code === 'KeyP' || code === 'Escape') {
+        if (code === 'KeyP' || code === 'Escape' || e.key === 'p' || e.key === 'P') {
             e.preventDefault();
             if (GameState.isRunning) {
                 GameSystem.togglePause();
@@ -762,17 +1008,10 @@ const InputSystem = {
             return;
         }
 
-        // M - Musique
-        if (code === 'KeyM') {
-            e.preventDefault();
-            toggleMusic();
-            return;
-        }
+
 
         // Ignorer si pas en jeu ou en pause
         if (!GameState.isRunning || GameState.isPaused || !GameState.currentPiece) return;
-
-        const piece = GameState.currentPiece;
 
         switch (code) {
             // Hold
@@ -783,33 +1022,32 @@ const InputSystem = {
                 GameSystem.holdPiece();
                 break;
 
-            // Gauche
+            // Gauche (avec DAS)
             case 'ArrowLeft':
             case 'KeyA':
                 e.preventDefault();
-                if (!CollisionSystem.check(piece.shape, piece.x - 1, piece.y)) {
-                    piece.x--;
-                    GameEvents.emit(EVENTS.PIECE_MOVE, { direction: 'left' });
-                }
+                this.startHorizontalMove('left');
                 break;
 
-            // Droite
+            // Droite (avec DAS)
             case 'ArrowRight':
             case 'KeyD':
                 e.preventDefault();
-                if (!CollisionSystem.check(piece.shape, piece.x + 1, piece.y)) {
-                    piece.x++;
-                    GameEvents.emit(EVENTS.PIECE_MOVE, { direction: 'right' });
-                }
+                this.startHorizontalMove('right');
                 break;
 
-            // Soft Drop
+            // Soft Drop (maintenu)
             case 'ArrowDown':
             case 'KeyS':
                 e.preventDefault();
+                // Premier drop immédiat
                 if (GameSystem.dropPiece()) {
                     ScoreSystem.add(CONFIG.SCORING.SOFT_DROP);
                 }
+                // Activer le soft drop continu
+                this.softDrop.active = true;
+                this.softDrop.lastDropTime = performance.now();
+                RenderSystem.drawBoard();
                 break;
 
             // Rotation horaire
@@ -817,40 +1055,88 @@ const InputSystem = {
             case 'KeyW':
             case 'KeyX':
                 e.preventDefault();
-                InputSystem.tryRotate(true);
+                this.tryRotateSRS(true);
+                RenderSystem.drawBoard();
                 break;
 
             // Rotation anti-horaire
             case 'KeyZ':
                 e.preventDefault();
-                InputSystem.tryRotate(false);
+                this.tryRotateSRS(false);
+                RenderSystem.drawBoard();
                 break;
         }
-
-        RenderSystem.drawBoard();
     },
 
+    // Gestion keyup
     handleKeyUp(e) {
-        delete InputSystem.keysDown[e.code];
+        const code = e.code;
+        this.keysDown.delete(code);
+
+        // Arrêter DAS si touche direction relâchée
+        if (['ArrowLeft', 'KeyA'].includes(code)) {
+            this.stopHorizontalMove('left');
+        }
+        if (['ArrowRight', 'KeyD'].includes(code)) {
+            this.stopHorizontalMove('right');
+        }
+
+        // Arrêter soft drop
+        if (['ArrowDown', 'KeyS'].includes(code)) {
+            this.softDrop.active = false;
+        }
     },
 
-    tryRotate(clockwise = true) {
+    // SRS (Super Rotation System) avec wall kicks
+    tryRotateSRS(clockwise = true) {
         const piece = GameState.currentPiece;
+        if (!piece) return false;
+
+        const currentRotation = piece.rotation;
+        const newRotation = clockwise
+            ? (currentRotation + 1) % 4
+            : (currentRotation + 3) % 4;
+
+        // Obtenir la shape pivotée
         const rotated = PieceSystem.rotate(piece.shape, clockwise);
 
-        const kicks = [0, -1, 1, -2, 2];
+        // Déterminer quelle table de wall kicks utiliser
+        let kickTable;
+        if (piece.type === 'I') {
+            kickTable = CONFIG.SRS_WALL_KICKS.I;
+        } else if (piece.type === 'O') {
+            kickTable = CONFIG.SRS_WALL_KICKS.O;
+        } else {
+            kickTable = CONFIG.SRS_WALL_KICKS.JLSTZ;
+        }
 
-        for (const kick of kicks) {
-            if (!CollisionSystem.check(rotated, piece.x + kick, piece.y)) {
+        // Clé de transition
+        const transitionKey = `${currentRotation}->${newRotation}`;
+        const kicks = kickTable[transitionKey] || [[0, 0]];
+
+        // Essayer chaque wall kick
+        for (const [dx, dy] of kicks) {
+            // Note: dans Tetris, dy positif = vers le haut (on inverse)
+            if (!CollisionSystem.check(rotated, piece.x + dx, piece.y - dy)) {
                 piece.shape = rotated;
-                piece.x += kick;
-                piece.rotation = (piece.rotation + (clockwise ? 1 : 3)) % 4;
-                GameEvents.emit(EVENTS.PIECE_ROTATE, { clockwise });
+                piece.x += dx;
+                piece.y -= dy;
+                piece.rotation = newRotation;
+                GameEvents.emit(EVENTS.PIECE_ROTATE, { clockwise, kick: [dx, dy] });
+                GameSystem.resetLockDelay();
                 return true;
             }
         }
 
         return false;
+    },
+
+    // Reset (pour nouvelle partie)
+    reset() {
+        this.keysDown.clear();
+        this.das.direction = null;
+        this.das.dasActive = false;
+        this.softDrop.active = false;
     }
 };
 
@@ -859,18 +1145,15 @@ const InputSystem = {
 // ===================
 function toggleMusic() {
     const isPlaying = chillMusic.toggle();
-    const btn = document.getElementById('musicBtn');
-    const icon = document.getElementById('musicIcon');
-    const text = document.getElementById('musicText');
 
-    if (isPlaying) {
-        btn.classList.add('active');
-        icon.textContent = '🎵';
-        text.textContent = 'Musique ON';
-    } else {
-        btn.classList.remove('active');
-        icon.textContent = '🔇';
-        text.textContent = 'Musique OFF';
+    // Feedback visuel sur le raccourci M dans la liste des contrôles
+    const musicControl = document.querySelector('.control-item.clickable[onclick="toggleMusic()"]');
+    if (musicControl) {
+        if (isPlaying) {
+            musicControl.classList.add('active');
+        } else {
+            musicControl.classList.remove('active');
+        }
     }
 
     GameEvents.emit(EVENTS.MUSIC_TOGGLE, { playing: isPlaying });

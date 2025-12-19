@@ -4,7 +4,7 @@ class ChillMusicGenerator {
         this.audioContext = null;
         this.masterGain = null;
         this.isPlaying = false;
-        this.volume = 0.4;
+        this.volume = 0.6;
         this.schedulerInterval = null;
         this.nextChordTime = 0;
         this.chordDuration = 4; // secondes
@@ -105,8 +105,8 @@ class ChillMusicGenerator {
 
         // Envelope ADSR douce
         gainNode.gain.setValueAtTime(0, startTime);
-        gainNode.gain.linearRampToValueAtTime(0.07, startTime + 0.8);
-        gainNode.gain.setValueAtTime(0.07, startTime + duration * 0.5);
+        gainNode.gain.linearRampToValueAtTime(0.15, startTime + 0.8);
+        gainNode.gain.setValueAtTime(0.15, startTime + duration * 0.5);
         gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
 
         osc1.connect(filter);
@@ -150,7 +150,7 @@ class ChillMusicGenerator {
         filter.frequency.value = 2000;
 
         gainNode.gain.setValueAtTime(0.001, startTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.05, startTime + 0.03);
+        gainNode.gain.exponentialRampToValueAtTime(0.1, startTime + 0.03);
         gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
 
         osc.connect(filter);
@@ -183,8 +183,8 @@ class ChillMusicGenerator {
         filter.frequency.value = 250;
 
         gainNode.gain.setValueAtTime(0.001, startTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.12, startTime + 0.1);
-        gainNode.gain.setValueAtTime(0.1, startTime + duration * 0.4);
+        gainNode.gain.exponentialRampToValueAtTime(0.25, startTime + 0.1);
+        gainNode.gain.setValueAtTime(0.2, startTime + duration * 0.4);
         gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
 
         osc.connect(filter);
@@ -208,8 +208,8 @@ class ChillMusicGenerator {
         osc.frequency.value = frequency / 4;
 
         gainNode.gain.setValueAtTime(0.001, startTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.08, startTime + 0.2);
-        gainNode.gain.setValueAtTime(0.06, startTime + duration * 0.6);
+        gainNode.gain.exponentialRampToValueAtTime(0.15, startTime + 0.2);
+        gainNode.gain.setValueAtTime(0.12, startTime + duration * 0.6);
         gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
 
         osc.connect(gainNode);
